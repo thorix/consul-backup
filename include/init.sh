@@ -21,7 +21,7 @@ fi
 
 # How long to sleep between backups. Default is 1800secs = 30mins
 if [ -z "${SLEEP_DURATION+x}" ]; then
-  SLEEP_DURATION=1800
+  SLEEP_DURATION=7200 # Time in seconds. 7200secs=2hours
   echo "Using default setting for sleep duration: '${SLEEP_DURATION}'"
 else
   echo "Using environment variable for sleep duration: '${SLEEP_DURATION}'"
@@ -84,11 +84,11 @@ run_consul()
     echo "Needed variable not set 'CONSUL_ARGS', exiting"
     exit 1
   fi
-3
+
   # Run consul in the background
   mkdir -p /consul/data/
   chown -R consul /consul/data/
-  su-exec consul consul agent ${CONSUL_ARGS} &
+  echo su-exec consul "consul agent ${CONSUL_ARGS}" &
   sleep 10
 }
 
@@ -99,6 +99,7 @@ if [ -n "${RESTORE_FILE}" ]; then
     restore_snapshot
   else
     echo "Error: Consul is not running!"
+    exit 1
   fi
 else
   run_consul

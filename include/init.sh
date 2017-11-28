@@ -6,26 +6,26 @@
 #   ./init.sh <given file name> # This will assume consul agent is running and restore the file.
 
 # kill 0: nested sub-shells need to be killed as well and script exits should trigger that as well
-trap "exit" INT TERM
-trap "kill 0" EXIT
+#trap "exit" INT TERM
+#trap "kill 0" EXIT
 
 echo "Starting Consul backup service"
 
 # If the user gives an argument then use this as the  name of the file to restore
 if [ "$1" != "" ]; then
-    RESTORE_FILE=$1
-    echo "Restore file given on command line. '$RESTORE_FILE'"
+  RESTORE_FILE=$1
+  echo "Restore file given on command line. '$RESTORE_FILE'"
+
+  RESTORE_TIMEOUT=${RESTORE_TIMEOUT:-60}
+  echo "Using the wait time for Consul before restore: '${RESTORE_TIMEOUT}' (secs)"
 else
-    echo "Positional parameter 1 is empty"
+  # How long to sleep between backups. Default is 1800secs = 30mins
+  SLEEP_DURATION=${SLEEP_DURATION:-60}
+  echo "Using Backup sleep duration: '${SLEEP_DURATION}'"
 fi
 
-# How long to sleep between backups. Default is 1800secs = 30mins
-if [ -z "${SLEEP_DURATION+x}" ]; then
-  SLEEP_DURATION=7200 # Time in seconds. 7200secs=2hours
-  echo "Using default setting for sleep duration: '${SLEEP_DURATION}'"
-else
-  echo "Using environment variable for sleep duration: '${SLEEP_DURATION}'"
-fi
+
+
 
 # https://stackoverflow.com/questions/3601515/how-to-check-if-a-variable-is-set-in-bash
 if [ -z "${S3_URL+x}" ]; then
@@ -72,6 +72,7 @@ restore_snapshot()
   run_cmd "aws s3 cp \"${S3_URL}${RESTORE_FILE}\" ./"
   if [ -f "/${RESTORE_FILE}" ]; then
     run_cmd "consul snapshot restore \"${RESTORE_FILE}\""
+    exit 0
   else
     echo "Error: awscli did not download the given snapshot. Looking for '/${RESTORE_FILE}'"
     exit 1
@@ -93,14 +94,18 @@ run_consul()
 }
 
 
-
 if [ -n "${RESTORE_FILE}" ]; then
-  if pgrep -f "consul agent"; then
-    restore_snapshot
-  else
-    echo "Error: Consul is not running!"
-    exit 1
-  fi
+  i="0"
+  while [ $i -le $((RESTORE_TIMEOUT/5)) ]; do
+    echo "Waiting for Consul..."
+    if pgrep -f "consul agent"; then
+      restore_snapshot
+    fi
+    sleep 5
+    i=$((i+1))
+  done
+  echo "Error: Consul is not running!"
+  exit 1
 else
   run_consul
   backup_loop

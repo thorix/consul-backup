@@ -8,8 +8,18 @@
 # kill 0: nested sub-shells need to be killed as well and script exits should trigger that as well
 #trap "exit" INT TERM
 #trap "kill 0" EXIT
+### trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
+cleanup() {
+    echo "#$?#"
+    # kill 0
+    local pids=$(jobs -p)
+    echo "${pid}"
+    # [ -n "$pids" ] && kill $pids
+    echo "#$?#"
+}
+trap "cleanup" INT QUIT TERM EXIT
 
-echo "Starting Consul backup service"
+
 
 # If the user gives an argument then use this as the  name of the file to restore
 if [ "$1" != "" ]; then
@@ -44,6 +54,7 @@ run_cmd()
  # This is the main loop that will run forever, or until an error.
 backup_loop()
 {
+  echo "Starting Consul backup service"
   while true; do
     # Create file name
     FILENAME="/consul-$(date -u +%Y%m%d.%H%M%S).snap"
@@ -89,10 +100,11 @@ run_consul()
   # Run consul in the background
   mkdir -p /consul/data/
   chown -R consul /consul/data/
-  echo su-exec consul "consul agent ${CONSUL_ARGS}" &
+  su-exec consul consul agent ${CONSUL_ARGS} &
   sleep 10
 }
 
+run_consul
 
 if [ -n "${RESTORE_FILE}" ]; then
   i="0"
@@ -107,6 +119,5 @@ if [ -n "${RESTORE_FILE}" ]; then
   echo "Error: Consul is not running!"
   exit 1
 else
-  run_consul
   backup_loop
 fi
